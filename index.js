@@ -16,7 +16,6 @@ module.exports = async function (context, req) {
 
     // app_mentionイベントを処理
     const event = req.body.event;
-    let reply = ""; // 修正: reply変数をここで宣言
     if (event && event.type === 'app_mention') {
         try {
             const key = process.env.OPENAI_API_KEY; // 実際のAzure OpenAIキーに置き換えてください
@@ -30,13 +29,21 @@ module.exports = async function (context, req) {
             ];
             const deploymentId = process.env.OPENAI_API_MODEL;
             const response = await client.streamChatCompletions(deploymentId, messages, { maxTokens: 128 },);
-            console.log(response)
-            for await (const a_response of response) {
-                for (const a_res of a_response.choices) {
-                console.log(a_res.delta?.content);
+            context.log(response)
+            const reader = response.getReader();
+            const decoder = new TextDecoder("utf-8");
+            let reply = '';
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) {
+                    break; // ストリームの終端に達したらループを終了
                 }
+                context.log(`value is ${JSON.stringify(value)}`)
+                reply += decoder.decode(value, { stream: true });
             }
-            reply = response.data.choices[0].message.content; // 修正: 変数のスコープ問題を解決
+            reply += decoder.decode();
+            
+            context.log(reply); // 結合された応答をログに出力
 
             // Slackに応答を投稿
             await slackClient.chat.postMessage({
