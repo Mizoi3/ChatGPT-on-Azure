@@ -1,11 +1,11 @@
 const { WebClient } = require('@slack/web-api');
-const { OpenAI } = require('openai');
+const { OpenAIClient, AzureKeyCredential } = require("@azure/openai");
 
-// SlackとOpenAIのクライアントを初期化
-const slackClient = new WebClient(process.env.SLACK_BOT_TOKEN);
-const openAi = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+// // SlackとOpenAIのクライアントを初期化
+// const slackClient = new WebClient(process.env.SLACK_BOT_TOKEN);
+// const openAi = new OpenAI({
+//   apiKey: process.env.OPENAI_API_KEY,
+// });
 
 // ここから可変
 module.exports = async function (context, req) {
@@ -22,19 +22,17 @@ module.exports = async function (context, req) {
     let reply = ""; // 修正: reply変数をここで宣言
     if (event && event.type === 'app_mention') {
         try {
+            const key = process.env.OPENAI_API_KEY; // 実際のAzure OpenAIキーに置き換えてください
+            const endpoint = process.env.OPENAI_API_URL;
+            const client = new OpenAIClient(endpoint, new AzureKeyCredential(key));
             context.log(`Your message is ${event.text}`);
             // ChatGPTからの応答を生成
-            const response = await openAi.createChatCompletion({
-                messages: [{
-                        role: "user",
-                        content: event.text,
-                    }],
-                max_tokens: 800,
-                temperature: 0.7,
-                frequency_penalty: 0,
-                presence_penalty: 0,
-                top_p: 0.95,
-            });
+            const messages = [
+              { role: "system", content: "システムレベルのプロンプトでコンテキストを設定します。" },
+              { role: "user", content: "ユーザーの質問や発言。" },
+              // 必要に応じてさらにメッセージを追加
+            ];
+            const response = await client.streamChatCompletions("gpt-35-turbo", messages, { maxTokens: 128 });
             reply = response.data.choices[0].message.content; // 修正: 変数のスコープ問題を解決
             context.log(reply);
 
