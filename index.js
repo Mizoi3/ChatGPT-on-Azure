@@ -26,12 +26,12 @@ module.exports = async function (context, req) {
             // ChatGPTからの応答を生成
             const messages = [
               { role: "system", content: "システムレベルのプロンプトでコンテキストを設定します。" },
-              { role: "user", content: "ユーザーの質問や発言。" },
-              // 必要に応じてさらにメッセージを追加
+              { role: "user", content: event.text }
             ];
-            const response = await client.streamChatCompletions("gpt-35-turbo", messages, { maxTokens: 128 });
+            const deploymentId = process.env.OPENAI_API_MODEL;
+            const response = await client.streamChatCompletions(deploymentId, messages, { maxTokens: 128 });
             reply = response.data.choices[0].message.content; // 修正: 変数のスコープ問題を解決
-            context.log(reply);
+            context.log(`The response is ${response}`);
 
             // Slackに応答を投稿
             await slackClient.chat.postMessage({
