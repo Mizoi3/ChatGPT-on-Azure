@@ -7,6 +7,7 @@ const openAi = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
+// ここから可変
 module.exports = async function (context, req) {
     // チャレンジリクエストに対応
     if (req.body.challenge) {
