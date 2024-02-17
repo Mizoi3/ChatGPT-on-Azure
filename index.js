@@ -1,11 +1,8 @@
 const { WebClient } = require('@slack/web-api');
 const { OpenAIClient, AzureKeyCredential } = require("@azure/openai");
 
-// // SlackとOpenAIのクライアントを初期化
-// const slackClient = new WebClient(process.env.SLACK_BOT_TOKEN);
-// const openAi = new OpenAI({
-//   apiKey: process.env.OPENAI_API_KEY,
-// });
+// SlackとOpenAIのクライアントを初期化
+const slackClient = new WebClient(process.env.SLACK_BOT_TOKEN);
 
 // ここから可変
 module.exports = async function (context, req) {
