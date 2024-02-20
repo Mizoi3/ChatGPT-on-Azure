@@ -4,6 +4,17 @@ const { WebClient } = require('@slack/web-api');
 // Slackクライアントの初期化
 const slackClient = new WebClient(process.env.SLACK_BOT_TOKEN);
 
+async function fetchThreadMessages(channel, threadTs) {
+    const response = await slackClient.conversations.replies({
+        channel: channel,
+        ts: threadTs,
+    });
+    if (!response.ok) {
+        throw new Error('Failed to fetch thread messages');
+    }
+    return response.messages;
+}
+
 module.exports = async function (context, req) {
     const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
     // チャレンジリクエストに対応
@@ -19,11 +30,20 @@ module.exports = async function (context, req) {
         const apiKey = process.env.OPENAI_API_KEY;
         const model = `gpt-35-turbo`;
         const endpoint = process.env.OPENAI_API_ENDPOINT;
-
         const headers = {
             'Content-Type': 'application/json',
             'api-key': apiKey
         };
+        // app_mentionイベントを処理する部分に以下のコードを追加します
+        const threadMessages = await fetchThreadMessages(event.channel, event.thread_ts || event.ts);
+        
+        // コンテキストとして利用するメッセージを抽出・整形
+        const contextMessages = threadMessages.map(msg => {
+            return {
+                role: msg.user === process.env.GPT_BOT_USER_ID ? "system" : "user",
+                content: msg.text.replace(/<@[^>]+>/g, '').trim() // メンションを取り除く
+            };
+        }).slice(-process.env.MAX_CONTEXT_LENGTH); // 最新の5件のメッセージを利用する例
 
         const messages = [
             { 
@@ -37,7 +57,8 @@ module.exports = async function (context, req) {
         ];
 
         const body = JSON.stringify({
-            messages: messages,
+            model = process.env.OPENAI_MODEL,
+            messages: [...contextMessages, ...messages],
             max_tokens: 800,
             temperature: 0.7,
             frequency_penalty: 0,
@@ -68,8 +89,13 @@ module.exports = async function (context, req) {
         context.res = { body: "Success" };
 
         } catch (error) {
-            context.log.error(error);
-            context.res = { status: 500, body: "Internal Server Error" };
+        context.log.error(`Error occurred: ${error.message}`);
+        await slackClient.chat.postMessage({
+            channel: event.channel,
+            text: "エラーが発生しました。もう一度試してください。",
+            thread_ts: event.ts,
+        });
+        context.res = { status: 500, body: "Internal Server Error" };
         }
 
     } else {
