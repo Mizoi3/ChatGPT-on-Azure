@@ -1,65 +1,77 @@
 const { WebClient } = require('@slack/web-api');
-const { OpenAIClient, AzureKeyCredential } = require("@azure/openai");
+// const fetch = require('node-fetch');
 
-// SlackとOpenAIのクライアントを初期化
+// Slackクライアントの初期化
 const slackClient = new WebClient(process.env.SLACK_BOT_TOKEN);
 
-// ここから可変
 module.exports = async function (context, req) {
+    const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
     // チャレンジリクエストに対応
     if (req.body.challenge) {
-        context.res = {
-            body: req.body.challenge
-        };
+        context.res = { body: req.body.challenge };
         return;
     }
 
     // app_mentionイベントを処理
     const event = req.body.event;
     if (event && event.type === 'app_mention') {
-        try {
-            const key = process.env.OPENAI_API_KEY; // 実際のAzure OpenAIキーに置き換えてください
-            const endpoint = process.env.OPENAI_API_URL;
-            const client = new OpenAIClient(endpoint, new AzureKeyCredential(key));
-            context.log(`Your message is ${event.text}`);
-            // ChatGPTからの応答を生成
-            const messages = [
-              { role: "system", content: "システムレベルのプロンプトでコンテキストを設定します。" },
-              { role: "user", content: event.text },
-            ];
-            const deploymentId = process.env.OPENAI_API_MODEL;
-            const response = await client.streamChatCompletions(deploymentId, messages, { maxTokens: 128 },);
-            context.log(response)
-            const reader = response.getReader();
-            const decoder = new TextDecoder("utf-8");
-            let reply = '';
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) {
-                    break; // ストリームの終端に達したらループを終了
-                }
-                context.log(`value is ${JSON.stringify(value)}`)
-                reply += decoder.decode(value, { stream: true });
-            }
-            reply += decoder.decode();
-            
-            context.log(reply); // 結合された応答をログに出力
+        context.log(`Your message: ${event.text}`)
+        const apiKey = process.env.OPENAI_API_KEY;
+        const model = `gpt-35-turbo`;
+        const endpoint = process.env.OPENAI_API_ENDPOINT;
 
-            // Slackに応答を投稿
-            await slackClient.chat.postMessage({
-                channel: event.channel,
-                text: reply,
-                thread_ts: event.ts, // スレッド内で返信
+        const headers = {
+            'Content-Type': 'application/json',
+            'api-key': apiKey
+        };
+
+        const messages = [
+            { 
+                role: "system", 
+                content: process.env.CHAT_GPT_SYSTEM_PROMPT 
+            },
+            { 
+                role: "user", 
+                content: event.text // ここにはSlackイベントから受け取ったユーザーのメッセージが入ります。
+            }
+        ];
+
+        const body = JSON.stringify({
+            messages: messages,
+            max_tokens: 800,
+            temperature: 0.7,
+            frequency_penalty: 0,
+            presence_penalty: 0,
+            top_p: 0.95,
+            stop: null
+        });
+
+        try {
+            const response = await fetch(endpoint, {
+                method: 'POST',
+                headers: headers,
+                body: body
             });
 
-            context.res = { body: "Success" };
+        const data = await response.json();
+
+        // 応答からテキストを抽出
+        const replyText = data.choices[0].message.content;
+
+        // Slackに応答を投稿
+        await slackClient.chat.postMessage({
+            channel: event.channel,
+            text: replyText,
+            thread_ts: event.ts, // スレッド内で返信
+        });
+
+        context.res = { body: "Success" };
+
         } catch (error) {
             context.log.error(error);
-            context.res = {
-                status: 500,
-                body: "Internal Server Error",
-            };
+            context.res = { status: 500, body: "Internal Server Error" };
         }
+
     } else {
         // イベントがapp_mention以外の場合は無視
         context.res = { status: 200, body: 'Ignored event' };
