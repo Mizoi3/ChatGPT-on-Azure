@@ -1,5 +1,4 @@
 const { WebClient } = require('@slack/web-api');
-// const fetch = require('node-fetch');
 
 // Slackクライアントの初期化
 const slackClient = new WebClient(process.env.SLACK_BOT_TOKEN);
@@ -28,7 +27,6 @@ module.exports = async function (context, req) {
     if (event && event.type === 'app_mention') {
         context.log(`Your message: ${event.text}`)
         const apiKey = process.env.OPENAI_API_KEY;
-        const model = `gpt-35-turbo`;
         const endpoint = process.env.OPENAI_API_ENDPOINT;
         const headers = {
             'Content-Type': 'application/json',
@@ -57,7 +55,7 @@ module.exports = async function (context, req) {
         ];
 
         const body = JSON.stringify({
-            model = process.env.OPENAI_MODEL,
+            model = process.env.OPENAI_MODEL, // gpt-3.5-turbo or gpt4
             messages: [...contextMessages, ...messages],
             max_tokens: 800,
             temperature: 0.7,
